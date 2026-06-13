@@ -1,0 +1,51 @@
+<svg width="113" height="120" viewBox="0 0 113 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    /* Оптимизированная анимация без наложения */
+    @keyframes wave {
+      0%, 100% { transform: translateY(0); }
+      25% { transform: translateY(-6px); }
+      50% { transform: translateY(0); }
+      75% { transform: translateY(3px); }
+    }
+
+    /* Упорядоченные задержки с учетом расположения элементов */
+    .element1 { animation: wave 4s ease-in-out infinite; }
+    .element2 { animation: wave 4s ease-in-out infinite 0.3s; }
+    .element3 { animation: wave 4s ease-in-out infinite 0.6s; }
+    .element4 { animation: wave 4s ease-in-out infinite 0.9s; }
+    .element5 { animation: wave 4s ease-in-out infinite 1.2s; }
+    .element6 { animation: wave 4s ease-in-out infinite 1.5s; }
+    .element7 { animation: wave 4s ease-in-out infinite 1.8s; }
+  </style>
+  
+  <!-- Сдвигаем всю группу на 15px вниз -->
+  <g transform="translate(0, 15)">
+    <g filter="url(#filter0_d_130_9)">
+      <!-- Линии  -->
+      <path d="M81.3101 59.8291L56.2977 70.9148L31.2854 59.8291" stroke="#DDDA84" stroke-width="2" class="element1"/>
+      <path d="M82.4478 50.4566L56.2984 62.1108L30.1491 50.4566" stroke="#E8FFFB" class="element2"/>
+      
+      <!-- Круги -->
+      <ellipse cx="56.302" cy="43.2033" rx="6.82157" ry="6.82198" fill="#E8FFFB" class="element3"/>
+      <ellipse cx="44.9369" cy="30.6972" rx="4.54771" ry="4.54799" fill="#DDDA84" class="element4"/>
+      <ellipse cx="67.6649" cy="30.6972" rx="4.54771" ry="4.54799" fill="#E8FFFB" class="element4"/>
+      <ellipse cx="60.8078" cy="20.5096" rx="3.41079" ry="3.41099" fill="#DDDA84" class="element5"/>
+      <ellipse cx="51.8107" cy="20.5096" rx="3.41079" ry="3.41099" fill="#E8FFFB" class="element5"/>
+      <ellipse cx="56.3002" cy="10.2293" rx="2.27385" ry="2.27399" fill="#E8FFFB" class="element6"/>
+      <ellipse cx="56.3525" cy="1.68028" rx="1.68018" ry="1.68028" fill="#DDDA84" class="element7"/>
+    </g>
+  </g>
+  
+  <defs>
+    <filter id="filter0_d_130_9" x="-10" y="-10" width="133" height="140" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="6"/>
+      <feGaussianBlur stdDeviation="2"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_130_9"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_130_9" result="shape"/>
+    </filter>
+  </defs>
+</svg>
