@@ -42,6 +42,8 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [loadingReviewStatus, setLoadingReviewStatus] = useState(false);
+
   const [userReview, setUserReview] = useState<{ 
   id: string; 
   text: string; 
@@ -86,51 +88,47 @@ const sanitizeText = (text: string): string => {
 
   // Функция для проверки наличия выполненных заказов и загрузки отзыва пользователя
   const checkUserReviewStatus = async () => {
-    if (!user) return;
+  if (!user) return;
+  
+  setLoadingReviewStatus(true); // 👈 Начинаем загрузку
+  
+  try {
+    // Проверяем наличие выполненных заказов
+    const ordersRef = collection(db, 'orders');
+    const q = query(ordersRef, where('clientId', '==', user.uid), where('status', '==', 'Выполнен'));
+    const ordersSnapshot = await getDocs(q);
+    setHasCompletedOrder(!ordersSnapshot.empty);
     
-    try {
-      // Проверяем наличие выполненных заказов
-      const ordersRef = collection(db, 'orders');
-      const q = query(ordersRef, where('clientId', '==', user.uid), where('status', '==', 'Выполнен'));
-      const ordersSnapshot = await getDocs(q);
-      setHasCompletedOrder(!ordersSnapshot.empty);
+    // Проверяем, оставлял ли пользователь отзыв
+    const reviewsRef = collection(db, 'reviews');
+    const reviewQuery = query(reviewsRef, where('clientId', '==', user.uid));
+    const reviewSnapshot = await getDocs(reviewQuery);
+    
+    if (!reviewSnapshot.empty) {
+      const reviewDoc = reviewSnapshot.docs[0];
+      const data = reviewDoc.data();
+      const updatedAt = data.updatedAt || data.createdAt;
       
-      // Проверяем, оставлял ли пользователь отзыв
-      const reviewsRef = collection(db, 'reviews');
-      const reviewQuery = query(reviewsRef, where('clientId', '==', user.uid));
-      const reviewSnapshot = await getDocs(reviewQuery);
-      
-      // В checkUserReviewStatus убедитесь, что сохраняются все поля
-if (!reviewSnapshot.empty) {
-  const reviewDoc = reviewSnapshot.docs[0];
-  const data = reviewDoc.data();
-  const updatedAt = data.updatedAt || data.createdAt;
-  
-  setUserReview({
-  id: reviewDoc.id,
-  text: data.reviewText || '',
-  rating: data.rating || 5,
-  date: data.date || '',
-  createdAt: data.createdAt,
-  updatedAt: updatedAt,
-  responseText: data.responseText || '',
-  canEdit: canEditReview(updatedAt),
-  isAgree: data.isAgree || false,  // 👈 Добавлено
-});
-  
-  // Для отладки
-  console.log('Загружен отзыв:', {
-    text: data.reviewText,
-    rating: data.rating,
-    canEdit: canEditReview(updatedAt)
-  });
-} else {
-        setUserReview(null);
-      }
-    } catch (error) {
-      console.error('Ошибка проверки отзывов:', error);
+      setUserReview({
+        id: reviewDoc.id,
+        text: data.reviewText || '',
+        rating: data.rating || 5,
+        date: data.date || '',
+        createdAt: data.createdAt,
+        updatedAt: updatedAt,
+        responseText: data.responseText || '',
+        canEdit: canEditReview(updatedAt),
+        isAgree: data.isAgree || false,
+      });
+    } else {
+      setUserReview(null);
     }
-  };
+  } catch (error) {
+    console.error('Ошибка проверки отзывов:', error);
+  } finally {
+    setLoadingReviewStatus(false); // 👈 Завершаем загрузку
+  }
+};
 
   // Загрузка заказов пользователя
   const fetchOrders = async () => {
@@ -1134,6 +1132,10 @@ const handleEditReview = () => {
           Заблокированные пользователи не могут оставлять отзывы
         </p>
       </div>
+    ) : loadingReviewStatus ? (
+      <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+        <div style={{ width: '40px', height: '40px', border: '3px solid rgba(221, 216, 132, 0.3)', borderTopColor: '#DDDA84', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' }} />
+      </div>
     ) : !hasCompletedOrder ? (
       <div style={{ textAlign: 'center', padding: '40px 20px' }}>
         <Star size={48} color="#DDDA84" opacity={0.3} style={{ margin: '0 auto 16px' }} />
@@ -1142,7 +1144,7 @@ const handleEditReview = () => {
         </p>
       </div>
     ) : showReviewForm ? (
-      // Форма для написания/редактирования отзыва (показываем В ПЕРВУЮ ОЧЕРЕДЬ, если showReviewForm = true)
+      // Форма для написания/редактирования отзыва
       <div style={{ backgroundColor: '#191B1B', borderRadius: '16px', padding: '20px' }}>
         <h4 style={{ fontFamily: 'var(--font-poiret-one), Poiret One, cursive', color: '#DDDA84', fontSize: '18px', marginBottom: '16px' }}>
           {editingReview ? 'Редактировать отзыв' : 'Оставить отзыв'}
@@ -1297,8 +1299,8 @@ const handleEditReview = () => {
             </div>
             <Clock size={12} color="#DDDA84" opacity={0.5} />
             <span style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '11px', opacity: 0.5 }}>
-  {userReview.date || 'Дата не указана'}
-</span>
+              {userReview.date || 'Дата не указана'}
+            </span>
           </div>
           
           <p style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '14px', lineHeight: 1.5, margin: 0 }}>
@@ -1330,27 +1332,27 @@ const handleEditReview = () => {
         </div>
       </div>
     ) : (
-  // Кнопка для создания отзыва
-  <button
-    onClick={() => setShowReviewForm(true)}
-    style={{
-      padding: '14px',
-      backgroundColor: '#DDDA84',
-      border: 'none',
-      borderRadius: '12px',
-      color: '#111314',
-      fontFamily: 'var(--font-jura), Jura, sans-serif',
-      fontSize: '16px',
-      fontWeight: 'bold',
-      cursor: 'pointer',
-      transition: 'all 0.3s ease',
-    }}
-    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#E8FFFB'; }}
-    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#DDDA84'; }}
-  >
-    + Оставить отзыв
-  </button>
-)}
+      // Кнопка для создания отзыва (показывается только если нет отзыва и загрузка завершена)
+      <button
+        onClick={() => setShowReviewForm(true)}
+        style={{
+          padding: '14px',
+          backgroundColor: '#DDDA84',
+          border: 'none',
+          borderRadius: '12px',
+          color: '#111314',
+          fontFamily: 'var(--font-jura), Jura, sans-serif',
+          fontSize: '16px',
+          fontWeight: 'bold',
+          cursor: 'pointer',
+          transition: 'all 0.3s ease',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#E8FFFB'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#DDDA84'; }}
+      >
+        + Оставить отзыв
+      </button>
+    )}
   </div>
 )}
         </div>
