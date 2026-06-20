@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, User, Mail, Phone, ShoppingBag, Star, AlertCircle, Calendar, Clock, Edit2, Check, XCircle, Trash2, Package, Home, Droplet, Palette, MessageCircle, Calendar as CalendarIcon, MapPin } from 'lucide-react';
+import { X, User, Mail, Phone, ShoppingBag, Star, AlertCircle, Calendar, Clock, Edit2, Check, XCircle, Trash2, Package, Home, Droplet, Palette, MessageCircle, Calendar as CalendarIcon, MapPin, Key } from 'lucide-react';
 import { useAuth } from '@/contexts';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
-
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -44,6 +45,13 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [loadingReviewStatus, setLoadingReviewStatus] = useState(false);
 
+  // Состояния для смены пароля
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetMessage, setResetMessage] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [loadingReset, setLoadingReset] = useState(false);
+
   const [userReview, setUserReview] = useState<{ 
   id: string; 
   text: string; 
@@ -53,7 +61,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   updatedAt: string;
   responseText?: string; 
   canEdit: boolean;
-  isAgree?: boolean;  // 👈 Добавлено поле
+  isAgree?: boolean;
 } | null>(null);
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [reviewText, setReviewText] = useState('');
@@ -86,20 +94,57 @@ const sanitizeText = (text: string): string => {
     .trim();
 };
 
+  // Валидация email
+  const isValidEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/;
+    return emailRegex.test(email);
+  };
+
+  // Обработка восстановления пароля
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError('');
+    setResetMessage('');
+    
+    if (!isValidEmail(resetEmail)) {
+      setResetError('Введите корректный email адрес');
+      return;
+    }
+    
+    setLoadingReset(true);
+    
+    try {
+      await sendPasswordResetEmail(auth, resetEmail);
+      setResetMessage('Инструкция по восстановлению пароля отправлена на ваш email');
+      setTimeout(() => {
+        setShowResetPassword(false);
+        setResetEmail('');
+        setResetMessage('');
+        setResetError('');
+      }, 3000);
+    } catch (err: any) {
+      if (err.code === 'auth/user-not-found') {
+        setResetError('Пользователь с таким email не найден');
+      } else {
+        setResetError('Ошибка при отправке письма. Попробуйте позже.');
+      }
+    } finally {
+      setLoadingReset(false);
+    }
+  };
+
   // Функция для проверки наличия выполненных заказов и загрузки отзыва пользователя
   const checkUserReviewStatus = async () => {
   if (!user) return;
   
-  setLoadingReviewStatus(true); // 👈 Начинаем загрузку
+  setLoadingReviewStatus(true);
   
   try {
-    // Проверяем наличие выполненных заказов
     const ordersRef = collection(db, 'orders');
     const q = query(ordersRef, where('clientId', '==', user.uid), where('status', '==', 'Выполнен'));
     const ordersSnapshot = await getDocs(q);
     setHasCompletedOrder(!ordersSnapshot.empty);
     
-    // Проверяем, оставлял ли пользователь отзыв
     const reviewsRef = collection(db, 'reviews');
     const reviewQuery = query(reviewsRef, where('clientId', '==', user.uid));
     const reviewSnapshot = await getDocs(reviewQuery);
@@ -126,7 +171,7 @@ const sanitizeText = (text: string): string => {
   } catch (error) {
     console.error('Ошибка проверки отзывов:', error);
   } finally {
-    setLoadingReviewStatus(false); // 👈 Завершаем загрузку
+    setLoadingReviewStatus(false);
   }
 };
 
@@ -413,6 +458,220 @@ const sanitizeText = (text: string): string => {
     );
   }
 
+  // Форма восстановления пароля
+  if (showResetPassword) {
+    return (
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 999999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          animation: 'fadeIn 0.3s ease-out',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            backdropFilter: 'blur(8px)',
+          }}
+          onClick={() => {
+            setShowResetPassword(false);
+            setResetEmail('');
+            setResetMessage('');
+            setResetError('');
+          }}
+        />
+        
+        <div
+          style={{
+            position: 'relative',
+            width: '90%',
+            maxWidth: '450px',
+            backgroundColor: '#111314',
+            borderRadius: '24px',
+            border: '1px solid rgba(221, 216, 132, 0.3)',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
+            animation: 'scaleIn 0.3s ease-out',
+            overflow: 'hidden',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '20px 24px',
+              borderBottom: '1px solid rgba(221, 216, 132, 0.2)',
+              backgroundColor: 'rgba(17, 19, 20, 0.95)',
+            }}
+          >
+            <h3
+              style={{
+                fontFamily: 'var(--font-poiret-one), Poiret One, cursive',
+                fontSize: '24px',
+                fontWeight: '300',
+                color: '#DDDA84',
+                margin: 0,
+              }}
+            >
+              Восстановление пароля
+            </h3>
+            <button
+              onClick={() => {
+                setShowResetPassword(false);
+                setResetEmail('');
+                setResetMessage('');
+                setResetError('');
+              }}
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(221, 216, 132, 0.1)',
+                border: '1px solid rgba(221, 216, 132, 0.3)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.3s ease',
+              }}
+            >
+              <X size={18} color="#DDDA84" />
+            </button>
+          </div>
+          
+          <form onSubmit={handleResetPassword} style={{ padding: '28px 24px 32px' }}>
+            <div style={{ marginBottom: '20px' }}>
+              <input
+                type="email"
+                placeholder="Введите ваш email"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  backgroundColor: '#191B1B',
+                  border: '1px solid rgba(221, 216, 132, 0.2)',
+                  borderRadius: '12px',
+                  color: '#E8FFFB',
+                  fontFamily: 'var(--font-jura), Jura, sans-serif',
+                  fontSize: '15px',
+                  outline: 'none',
+                  transition: 'all 0.3s ease',
+                }}
+                required
+              />
+            </div>
+            
+            {resetMessage && (
+              <div
+                style={{
+                  backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                  border: '1px solid rgba(46, 204, 113, 0.3)',
+                  borderRadius: '8px',
+                  padding: '10px',
+                  marginBottom: '20px',
+                }}
+              >
+                <p
+                  style={{
+                    color: '#2ecc71',
+                    fontFamily: 'var(--font-jura), Jura, sans-serif',
+                    fontSize: '13px',
+                    margin: 0,
+                    textAlign: 'center',
+                  }}
+                >
+                  {resetMessage}
+                </p>
+              </div>
+            )}
+            
+            {resetError && (
+              <div
+                style={{
+                  backgroundColor: 'rgba(255, 0, 0, 0.1)',
+                  border: '1px solid rgba(255, 0, 0, 0.3)',
+                  borderRadius: '8px',
+                  padding: '10px',
+                  marginBottom: '20px',
+                }}
+              >
+                <p
+                  style={{
+                    color: '#ff6b6b',
+                    fontFamily: 'var(--font-jura), Jura, sans-serif',
+                    fontSize: '13px',
+                    margin: 0,
+                    textAlign: 'center',
+                  }}
+                >
+                  {resetError}
+                </p>
+              </div>
+            )}
+            
+            <button
+              type="submit"
+              disabled={loadingReset}
+              style={{
+                width: '100%',
+                padding: '14px',
+                backgroundColor: '#DDDA84',
+                border: 'none',
+                borderRadius: '12px',
+                color: '#111314',
+                fontFamily: 'var(--font-jura), Jura, sans-serif',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                cursor: loadingReset ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease',
+                opacity: loadingReset ? 0.6 : 1,
+              }}
+            >
+              {loadingReset ? 'Отправка...' : 'Отправить инструкцию'}
+            </button>
+            
+            <div style={{ textAlign: 'center', marginTop: '20px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowResetPassword(false);
+                  setResetEmail('');
+                  setResetMessage('');
+                  setResetError('');
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'rgba(232, 255, 251, 0.6)',
+                  fontFamily: 'var(--font-jura), Jura, sans-serif',
+                  fontSize: '14px',
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                Вернуться в профиль
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   // Проверка возможности обновления (раз в день, только по дате)
   const canUpdate = () => {
     if (!clientData.updatedAt) return true;
@@ -474,16 +733,15 @@ const sanitizeText = (text: string): string => {
   try {
     const clientRef = doc(db, 'clients', user.uid);
     
-    // 👇 ЗАМЕНИТЕ editName НА sanitizeText(editName)
     const sanitizedName = sanitizeText(editName);
     
     await updateDoc(clientRef, {
-      fullName: sanitizedName,  // ← здесь используем sanitizedName
+      fullName: sanitizedName,
       phone: editPhone,
       updatedAt: new Date().toISOString(),
     });
     setClientData({ 
-      name: sanitizedName,  // ← и здесь
+      name: sanitizedName,
       phone: editPhone, 
       updatedAt: new Date().toISOString() 
     });
@@ -518,7 +776,6 @@ const handleSubmitReview = async () => {
   if (!user) return;
   setReviewError('');
   
-  // Санитизация текста
   const sanitizedText = sanitizeText(reviewText);
   
   if (!sanitizedText.trim()) {
@@ -531,7 +788,6 @@ const handleSubmitReview = async () => {
     return;
   }
   
-  // Проверка на блокировку
   const isBannedNow = await checkBan();
   if (isBannedNow) return;
   
@@ -541,13 +797,11 @@ const handleSubmitReview = async () => {
     const now = new Date();
     const nowISO = now.toISOString();
     
-    // Форматируем дату и время для отображения
     const formattedDate = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()}`;
     const formattedTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const timestamp = now.getTime();
     
     if (userReview && editingReview) {
-      // Обновление существующего отзыва
       if (!canEditReview(userReview.updatedAt)) {
         setReviewError('Изменение отзыва доступно не чаще 1 раза в 10 дней');
         setLoadingReview(false);
@@ -558,11 +812,9 @@ const handleSubmitReview = async () => {
         reviewText: sanitizedText,
         rating: reviewRating,
         updatedAt: nowISO,
-        // isAgree при редактировании сбрасывается на false, так как нужна повторная проверка
         isAgree: false,
       });
     } else {
-      // Новый отзыв
       const reviewsRef = collection(db, 'reviews');
       const reviewData = {
         clientId: user.uid,
@@ -575,21 +827,17 @@ const handleSubmitReview = async () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         hasResponse: false,
-        isAgree: false,  // 👈 Добавлено поле для модерации
+        isAgree: false,
       };
       await addDoc(reviewsRef, reviewData);
     }
     
-    // Обновляем состояние
     await checkUserReviewStatus();
     setShowReviewForm(false);
     setEditingReview(false);
     setReviewText('');
     setReviewRating(5);
-    
-    // Показываем сообщение о том, что отзыв отправлен на модерацию
-    setReviewError(''); // Очищаем ошибку
-    // Можно добавить отдельное сообщение об успехе
+    setReviewError('');
     
   } catch (error) {
     console.error('Ошибка при сохранении отзыва:', error);
@@ -617,6 +865,16 @@ const handleEditReview = () => {
     setReviewText('');
     setReviewRating(5);
     setReviewError('');
+  };
+
+  // Функция для открытия формы смены пароля
+  const handleOpenResetPassword = () => {
+    if (user?.email) {
+      setResetEmail(user.email);
+    }
+    setShowResetPassword(true);
+    setResetMessage('');
+    setResetError('');
   };
 
   return (
@@ -905,6 +1163,39 @@ const handleEditReview = () => {
                 </div>
               </div>
 
+              {/* Кнопка смены пароля */}
+              <button
+                onClick={handleOpenResetPassword}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  width: '100%',
+                  padding: '14px',
+                  backgroundColor: 'transparent',
+                  border: '2px solid rgba(221, 216, 132, 0.3)',
+                  borderRadius: '12px',
+                  color: '#DDDA84',
+                  fontFamily: 'var(--font-jura), Jura, sans-serif',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#DDDA84';
+                  e.currentTarget.style.backgroundColor = 'rgba(221, 216, 132, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(221, 216, 132, 0.3)';
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
+                <Key size={18} color="#DDDA84" />
+                Сменить пароль
+              </button>
+
               {isEditing && (
                 <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
                   <button
@@ -964,7 +1255,7 @@ const handleEditReview = () => {
                 onClick={handleLogout}
                 style={{
                   width: '100%',
-                  marginTop: '20px',
+                  marginTop: '8px',
                   padding: '14px',
                   backgroundColor: 'transparent',
                   border: '2px solid #DDDA84',
@@ -1123,238 +1414,235 @@ const handleEditReview = () => {
           )}
 
           {/* Вкладка "Отзывы" */}
-{activeTab === 'reviews' && (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-    {isBanned ? (
-      <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-        <AlertCircle size={48} color="#e74c3c" opacity={0.5} style={{ margin: '0 auto 16px' }} />
-        <p style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '14px', opacity: 0.6 }}>
-          Заблокированные пользователи не могут оставлять отзывы
-        </p>
-      </div>
-    ) : loadingReviewStatus ? (
-      <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-        <div style={{ width: '40px', height: '40px', border: '3px solid rgba(221, 216, 132, 0.3)', borderTopColor: '#DDDA84', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' }} />
-      </div>
-    ) : !hasCompletedOrder ? (
-      <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-        <Star size={48} color="#DDDA84" opacity={0.3} style={{ margin: '0 auto 16px' }} />
-        <p style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '14px', opacity: 0.6 }}>
-          Вы сможете оставить отзыв после выполнения хотя бы одного заказа
-        </p>
-      </div>
-    ) : showReviewForm ? (
-      // Форма для написания/редактирования отзыва
-      <div style={{ backgroundColor: '#191B1B', borderRadius: '16px', padding: '20px' }}>
-        <h4 style={{ fontFamily: 'var(--font-poiret-one), Poiret One, cursive', color: '#DDDA84', fontSize: '18px', marginBottom: '16px' }}>
-          {editingReview ? 'Редактировать отзыв' : 'Оставить отзыв'}
-        </h4>
-        
-        <div style={{ marginBottom: '16px' }}>
-          <p style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '13px', marginBottom: '8px' }}>Ваша оценка:</p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {[1, 2, 3, 4, 5].map((rating) => (
-              <button
-                key={rating}
-                type="button"
-                onClick={() => setReviewRating(rating)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  transition: 'transform 0.2s ease',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.1)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-              >
-                <Star
-                  size={28}
-                  fill={rating <= reviewRating ? '#DDDA84' : 'none'}
-                  color={rating <= reviewRating ? '#DDDA84' : 'rgba(221, 216, 132, 0.3)'}
-                />
-              </button>
-            ))}
-          </div>
-        </div>
-        
-        <textarea
-          placeholder="Расскажите о своем опыте... Минимум 10 символов"
-          value={reviewText}
-          onChange={(e) => setReviewText(e.target.value)}
-          rows={4}
-          style={{
-            width: '100%',
-            padding: '12px',
-            backgroundColor: '#111314',
-            border: '1px solid rgba(221, 216, 132, 0.3)',
-            borderRadius: '12px',
-            color: '#E8FFFB',
-            fontFamily: 'var(--font-jura), Jura, sans-serif',
-            fontSize: '14px',
-            outline: 'none',
-            resize: 'vertical',
-          }}
-        />
-        
-        {reviewError && (
-          <div style={{ marginTop: '12px', padding: '10px', backgroundColor: 'rgba(231, 76, 60, 0.1)', border: '1px solid #e74c3c', borderRadius: '8px' }}>
-            <p style={{ color: '#e74c3c', fontFamily: 'var(--font-jura), Jura, sans-serif', fontSize: '12px', margin: 0, textAlign: 'center' }}>{reviewError}</p>
-          </div>
-        )}
-        
-        <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
-          <button
-            type="button"
-            onClick={handleSubmitReview}
-            disabled={loadingReview}
-            style={{
-              flex: 1,
-              padding: '12px',
-              backgroundColor: '#DDDA84',
-              border: 'none',
-              borderRadius: '10px',
-              color: '#111314',
-              fontFamily: 'var(--font-jura), Jura, sans-serif',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              cursor: loadingReview ? 'not-allowed' : 'pointer',
-              transition: 'all 0.3s ease',
-              opacity: loadingReview ? 0.6 : 1,
-            }}
-            onMouseEnter={(e) => { if (!loadingReview) e.currentTarget.style.backgroundColor = '#E8FFFB'; }}
-            onMouseLeave={(e) => { if (!loadingReview) e.currentTarget.style.backgroundColor = '#DDDA84'; }}
-          >
-            {loadingReview ? 'Сохранение...' : (editingReview ? 'Сохранить' : 'Отправить отзыв')}
-          </button>
-          <button
-            type="button"
-            onClick={handleCancelReview}
-            style={{
-              flex: 1,
-              padding: '12px',
-              backgroundColor: 'transparent',
-              border: '2px solid rgba(221, 216, 132, 0.3)',
-              borderRadius: '10px',
-              color: '#DDDA84',
-              fontFamily: 'var(--font-jura), Jura, sans-serif',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#DDDA84'; e.currentTarget.style.backgroundColor = 'rgba(221, 216, 132, 0.1)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(221, 216, 132, 0.3)'; e.currentTarget.style.backgroundColor = 'transparent'; }}
-          >
-            Отмена
-          </button>
-        </div>
-      </div>
-    ) : userReview ? (
-      // Отображение существующего отзыва
-      <div>
-        <div style={{ 
-          backgroundColor: 'rgba(17, 19, 20, 0.8)', 
-          borderRadius: '16px', 
-          padding: '20px',
-          border: '1px solid rgba(221, 216, 132, 0.2)'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Star size={20} fill="#DDDA84" color="#DDDA84" />
-              <span style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#DDDA84', fontSize: '16px', fontWeight: 'bold' }}>
-                Ваш отзыв
-              </span>
-            </div>
-            {userReview.canEdit && (
-              <button
-                onClick={handleEditReview}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '6px 12px',
-                  borderRadius: '8px',
-                  color: '#DDDA84',
-                  fontFamily: 'var(--font-jura), Jura, sans-serif',
-                  fontSize: '12px',
-                  transition: 'all 0.3s ease',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(221, 216, 132, 0.1)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-              >
-                <Edit2 size={14} /> Редактировать
-              </button>
-            )}
-          </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              {[...Array(5)].map((_, i) => (
-                <Star key={i} size={16} fill={i < userReview.rating ? '#DDDA84' : 'none'} color={i < userReview.rating ? '#DDDA84' : 'rgba(221, 216, 132, 0.3)'} />
-              ))}
-            </div>
-            <Clock size={12} color="#DDDA84" opacity={0.5} />
-            <span style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '11px', opacity: 0.5 }}>
-              {userReview.date || 'Дата не указана'}
-            </span>
-          </div>
-          
-          <p style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '14px', lineHeight: 1.5, margin: 0 }}>
-            {userReview.text}
-          </p>
-          
-          {userReview.responseText && (
-            <div style={{ 
-              marginTop: '16px', 
-              padding: '12px 16px', 
-              backgroundColor: 'rgba(221, 216, 132, 0.05)',
-              borderRadius: '12px',
-              borderLeft: '3px solid #DDDA84'
-            }}>
-              <p style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#DDDA84', fontSize: '12px', marginBottom: '6px', fontWeight: 'bold' }}>
-                Ответ компании:
-              </p>
-              <p style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '13px', lineHeight: 1.5, margin: 0 }}>
-                {userReview.responseText}
-              </p>
+          {activeTab === 'reviews' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {isBanned ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                  <AlertCircle size={48} color="#e74c3c" opacity={0.5} style={{ margin: '0 auto 16px' }} />
+                  <p style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '14px', opacity: 0.6 }}>
+                    Заблокированные пользователи не могут оставлять отзывы
+                  </p>
+                </div>
+              ) : loadingReviewStatus ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                  <div style={{ width: '40px', height: '40px', border: '3px solid rgba(221, 216, 132, 0.3)', borderTopColor: '#DDDA84', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' }} />
+                </div>
+              ) : !hasCompletedOrder ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                  <Star size={48} color="#DDDA84" opacity={0.3} style={{ margin: '0 auto 16px' }} />
+                  <p style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '14px', opacity: 0.6 }}>
+                    Вы сможете оставить отзыв после выполнения хотя бы одного заказа
+                  </p>
+                </div>
+              ) : showReviewForm ? (
+                <div style={{ backgroundColor: '#191B1B', borderRadius: '16px', padding: '20px' }}>
+                  <h4 style={{ fontFamily: 'var(--font-poiret-one), Poiret One, cursive', color: '#DDDA84', fontSize: '18px', marginBottom: '16px' }}>
+                    {editingReview ? 'Редактировать отзыв' : 'Оставить отзыв'}
+                  </h4>
+                  
+                  <div style={{ marginBottom: '16px' }}>
+                    <p style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '13px', marginBottom: '8px' }}>Ваша оценка:</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {[1, 2, 3, 4, 5].map((rating) => (
+                        <button
+                          key={rating}
+                          type="button"
+                          onClick={() => setReviewRating(rating)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            transition: 'transform 0.2s ease',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.1)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                        >
+                          <Star
+                            size={28}
+                            fill={rating <= reviewRating ? '#DDDA84' : 'none'}
+                            color={rating <= reviewRating ? '#DDDA84' : 'rgba(221, 216, 132, 0.3)'}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <textarea
+                    placeholder="Расскажите о своем опыте... Минимум 10 символов"
+                    value={reviewText}
+                    onChange={(e) => setReviewText(e.target.value)}
+                    rows={4}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      backgroundColor: '#111314',
+                      border: '1px solid rgba(221, 216, 132, 0.3)',
+                      borderRadius: '12px',
+                      color: '#E8FFFB',
+                      fontFamily: 'var(--font-jura), Jura, sans-serif',
+                      fontSize: '14px',
+                      outline: 'none',
+                      resize: 'vertical',
+                    }}
+                  />
+                  
+                  {reviewError && (
+                    <div style={{ marginTop: '12px', padding: '10px', backgroundColor: 'rgba(231, 76, 60, 0.1)', border: '1px solid #e74c3c', borderRadius: '8px' }}>
+                      <p style={{ color: '#e74c3c', fontFamily: 'var(--font-jura), Jura, sans-serif', fontSize: '12px', margin: 0, textAlign: 'center' }}>{reviewError}</p>
+                    </div>
+                  )}
+                  
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                    <button
+                      type="button"
+                      onClick={handleSubmitReview}
+                      disabled={loadingReview}
+                      style={{
+                        flex: 1,
+                        padding: '12px',
+                        backgroundColor: '#DDDA84',
+                        border: 'none',
+                        borderRadius: '10px',
+                        color: '#111314',
+                        fontFamily: 'var(--font-jura), Jura, sans-serif',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        cursor: loadingReview ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.3s ease',
+                        opacity: loadingReview ? 0.6 : 1,
+                      }}
+                      onMouseEnter={(e) => { if (!loadingReview) e.currentTarget.style.backgroundColor = '#E8FFFB'; }}
+                      onMouseLeave={(e) => { if (!loadingReview) e.currentTarget.style.backgroundColor = '#DDDA84'; }}
+                    >
+                      {loadingReview ? 'Сохранение...' : (editingReview ? 'Сохранить' : 'Отправить отзыв')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelReview}
+                      style={{
+                        flex: 1,
+                        padding: '12px',
+                        backgroundColor: 'transparent',
+                        border: '2px solid rgba(221, 216, 132, 0.3)',
+                        borderRadius: '10px',
+                        color: '#DDDA84',
+                        fontFamily: 'var(--font-jura), Jura, sans-serif',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#DDDA84'; e.currentTarget.style.backgroundColor = 'rgba(221, 216, 132, 0.1)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(221, 216, 132, 0.3)'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    >
+                      Отмена
+                    </button>
+                  </div>
+                </div>
+              ) : userReview ? (
+                <div>
+                  <div style={{ 
+                    backgroundColor: 'rgba(17, 19, 20, 0.8)', 
+                    borderRadius: '16px', 
+                    padding: '20px',
+                    border: '1px solid rgba(221, 216, 132, 0.2)'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Star size={20} fill="#DDDA84" color="#DDDA84" />
+                        <span style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#DDDA84', fontSize: '16px', fontWeight: 'bold' }}>
+                          Ваш отзыв
+                        </span>
+                      </div>
+                      {userReview.canEdit && (
+                        <button
+                          onClick={handleEditReview}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            color: '#DDDA84',
+                            fontFamily: 'var(--font-jura), Jura, sans-serif',
+                            fontSize: '12px',
+                            transition: 'all 0.3s ease',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(221, 216, 132, 0.1)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                        >
+                          <Edit2 size={14} /> Редактировать
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} size={16} fill={i < userReview.rating ? '#DDDA84' : 'none'} color={i < userReview.rating ? '#DDDA84' : 'rgba(221, 216, 132, 0.3)'} />
+                        ))}
+                      </div>
+                      <Clock size={12} color="#DDDA84" opacity={0.5} />
+                      <span style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '11px', opacity: 0.5 }}>
+                        {userReview.date || 'Дата не указана'}
+                      </span>
+                    </div>
+                    
+                    <p style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '14px', lineHeight: 1.5, margin: 0 }}>
+                      {userReview.text}
+                    </p>
+                    
+                    {userReview.responseText && (
+                      <div style={{ 
+                        marginTop: '16px', 
+                        padding: '12px 16px', 
+                        backgroundColor: 'rgba(221, 216, 132, 0.05)',
+                        borderRadius: '12px',
+                        borderLeft: '3px solid #DDDA84'
+                      }}>
+                        <p style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#DDDA84', fontSize: '12px', marginBottom: '6px', fontWeight: 'bold' }}>
+                          Ответ компании:
+                        </p>
+                        <p style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '13px', lineHeight: 1.5, margin: 0 }}>
+                          {userReview.responseText}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {!userReview.canEdit && (
+                      <p style={{ marginTop: '12px', fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '11px', opacity: 0.4, textAlign: 'center' }}>
+                        Редактирование отзыва доступно не чаще 1 раза в 10 дней
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowReviewForm(true)}
+                  style={{
+                    padding: '14px',
+                    backgroundColor: '#DDDA84',
+                    border: 'none',
+                    borderRadius: '12px',
+                    color: '#111314',
+                    fontFamily: 'var(--font-jura), Jura, sans-serif',
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#E8FFFB'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#DDDA84'; }}
+                >
+                  + Оставить отзыв
+                </button>
+              )}
             </div>
           )}
-          
-          {!userReview.canEdit && (
-            <p style={{ marginTop: '12px', fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '11px', opacity: 0.4, textAlign: 'center' }}>
-              Редактирование отзыва доступно не чаще 1 раза в 10 дней
-            </p>
-          )}
-        </div>
-      </div>
-    ) : (
-      // Кнопка для создания отзыва (показывается только если нет отзыва и загрузка завершена)
-      <button
-        onClick={() => setShowReviewForm(true)}
-        style={{
-          padding: '14px',
-          backgroundColor: '#DDDA84',
-          border: 'none',
-          borderRadius: '12px',
-          color: '#111314',
-          fontFamily: 'var(--font-jura), Jura, sans-serif',
-          fontSize: '16px',
-          fontWeight: 'bold',
-          cursor: 'pointer',
-          transition: 'all 0.3s ease',
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#E8FFFB'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#DDDA84'; }}
-      >
-        + Оставить отзыв
-      </button>
-    )}
-  </div>
-)}
         </div>
       </div>
 
