@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 
+
 interface ProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -45,6 +46,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   id: string; 
   text: string; 
   rating: number; 
+  date?: string;
   createdAt: string;
   updatedAt: string;
   responseText?: string; 
@@ -108,6 +110,7 @@ if (!reviewSnapshot.empty) {
   id: reviewDoc.id,
   text: data.reviewText || '',
   rating: data.rating || 5,
+  date: data.date || '',
   createdAt: data.createdAt,
   updatedAt: updatedAt,
   responseText: data.responseText || '',
@@ -1294,8 +1297,8 @@ const handleEditReview = () => {
             </div>
             <Clock size={12} color="#DDDA84" opacity={0.5} />
             <span style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '11px', opacity: 0.5 }}>
-              {new Date(userReview.createdAt).toLocaleDateString('ru')}
-            </span>
+  {userReview.date || 'Дата не указана'}
+</span>
           </div>
           
           <p style={{ fontFamily: 'var(--font-jura), Jura, sans-serif', color: '#E8FFFB', fontSize: '14px', lineHeight: 1.5, margin: 0 }}>
